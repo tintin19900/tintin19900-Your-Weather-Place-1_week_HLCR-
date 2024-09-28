@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:weather/weather.dart';
+import 'package:weather_icons/weather_icons.dart';
 import 'package:weatherapp/consts.dart';
 import 'temperature.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +17,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> favoriteCities = [];
   WeatherFactory wf = WeatherFactory(OPENWEATHER_API_KEY); //API KEYS CALL
 
+  Map<String, Weather?> cityWeatherMap = {}; // Store weather data 
+  bool isLoading = true; // show loading state
+
   @override
 
     void initState() {
@@ -23,6 +27,26 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadFavoriteCities(); //For loading Favourite City
   }
 
+  Future<void> _fetchWeatherForAllCities() async {
+    try {
+      for (String city in favoriteCities) {
+        if (!cityWeatherMap.containsKey(city)) {
+          try {
+            Weather? weather = await wf.currentWeatherByCityName(city);
+            setState(() {
+              cityWeatherMap[city] = weather;
+            });
+          } catch (e) {
+          }
+        }
+      }
+    } catch (e) {
+    } finally {
+      setState(() {
+        isLoading = false; 
+      });
+    }
+  }
 
   
    void _loadFavoriteCities() async {
@@ -30,7 +54,56 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       favoriteCities = prefs.getKeys().where((key) => prefs.getBool(key) ?? false).toList();
     });
+     _fetchWeatherForAllCities();
   }
+
+    Color _getListViewColor(String cityName) {
+    Weather? weather = cityWeatherMap[cityName];
+    if (weather == null || weather.temperature == null) {
+      return Colors.grey[300]!; // Default color if no weather data is available
+    }
+
+    double? temp = weather.temperature?.celsius;
+    if (temp == null) return Colors.grey[300]!;
+
+    // Set color based on temperature range
+    if (temp <= 16.00) {
+      return Colors.blue[300]!; // Cold temperature
+    } else if (temp > 16 && temp <= 25) {
+      return Colors.green[300]!; // warm temperature
+    } else if (temp > 25 && temp <= 35) {
+      return Colors.orange[300]!; // Hot temperature
+    } else {
+      return Colors.red[400]!; // Very Hot temperature
+    }
+  }
+  Widget _buildWeatherInfo(String city) {
+  Weather? weather = cityWeatherMap[city];
+
+  if (weather == null || weather.temperature == null) {
+    return Text('No data available');
+  }
+
+  double? temp = weather.temperature?.celsius;
+  String? description = weather.weatherDescription ?? 'Unknown weather';
+  
+  return Row(
+    children: [
+      BoxedIcon(WeatherIcons.thermometer),
+      Text(
+        'Temperature: ${temp?.toStringAsFixed(1)}°C', 
+        style: GoogleFonts.prompt(fontSize: 16,color: Colors.black)
+      ),
+      SizedBox(width: 10),
+      BoxedIcon(WeatherIcons.cloud),
+      Text(
+        description, 
+        style: GoogleFonts.prompt(fontSize: 16,color: Colors.black)
+      ),
+    ],
+  );
+}
+
 
    Future<void> _navigateToTempScreen(String city) async {
     // Navigate to temperature screen and wait for result
@@ -55,8 +128,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Weather Application", style:  
-        GoogleFonts.prompt(fontSize: 30,
+        title: Text("Your Weather Place", style:  
+        GoogleFonts.prompt(fontSize: 24,
         color: Colors.white,
         fontWeight: FontWeight.bold
         ),
@@ -90,12 +163,12 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: EdgeInsets.all(16.0),
             
-            child: Text("Fast Favorite Tap List",   //Favourite City List 
+            child: Text("Your Places :",   //Favourite City List 
                 style: GoogleFonts.prompt(
                   color: const Color.fromARGB(242, 255, 255, 255),
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  fontStyle: FontStyle.italic
+                  fontSize: 20,
+               
+                 
                 ),
               
             ),
@@ -105,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      backgroundColor: Colors.lightBlue,
+      backgroundColor: const Color.fromARGB(255, 7, 1, 24),
     );
   }
 
@@ -127,21 +200,24 @@ return Expanded(
     itemCount: favoriteCities.length, // Loop for city list
     itemBuilder: (context, index) {
       String city = favoriteCities[index];
-      
+       Color listColor = _getListViewColor(city);
       return Column(
         children: [
           Container(
-            color: Colors.lightBlue[100], // Set background color
+            color: listColor, // Set background color
             child: ListTile(
               title: Text(
                 city,
                 style: GoogleFonts.prompt(
-                  fontSize: 16,
+                  fontSize: 18,
                   color: Colors.black,
+                  fontWeight: FontWeight.w500
                 ),
+                
               ),
+                subtitle: cityWeatherMap[city] != null ? _buildWeatherInfo(city) : Text('Loading...'),
               trailing: IconButton( // Icon for remove from list
-                icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                icon: const Icon(Icons.cancel_outlined, color: Colors.white),
                 onPressed: () {
                   _removeFromFavorites(city); // Remove city from favorites
                 },
@@ -154,6 +230,7 @@ return Expanded(
           const SizedBox(height: 8), //seperator
         ],
       );
+    
     },
   ),
 );
